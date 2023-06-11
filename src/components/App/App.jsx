@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ToastContainer } from 'react-toastify';
 import { toast } from 'react-toastify';
 
@@ -12,117 +12,94 @@ import Button from 'components/Button';
 import Loader from 'components/Loader';
 import Modal from 'components/Modal';
 
-class App extends Component {
-  state = {
-    searchQuery: '',
-    page: 1,
-    totalHits: [],
-    images: [],
-    loading: false,
-    endOfSearch: true,
-    showModal: false,
-    currentImage: '',
-    currentImageDescr: '',
-  };
+const App = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [images, setImages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [endOfSearch, setEndOfSearch] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [currentImage, setCurrentImage] = useState('');
+  const [currentImageDescr, setCurrentImageDescr] = useState('');
 
-  componentDidUpdate(_, prevState) {
-    if (prevState.searchQuery !== this.state.searchQuery) {
-      this.onSearch();
-    }
-  }
+  const notInitialRender = useRef(false);
 
-  toggleModal = () => {
-    this.setState(({ showModal }) => ({
-      showModal: !showModal,
-    }));
-  };
-
-  openModal = (image, descr) => {
-    this.setState({
-      currentImage: image,
-      currentImageDescr: descr,
-    });
-    this.toggleModal();
-  };
-
-  onSearch = async () => {
-    const { searchQuery, page } = this.state;
-    this.setState(prevState => ({
-      images: [...prevState.images],
-      totalHits: [...prevState.totalHits],
-      loading: true,
-    }));
-    const res = await fetchImages(searchQuery, page);
-    this.setState(({ page }) => ({ page: (page += 1) }));
-    if (res.data.hits.length === 0) {
-      this.setState({ images: [], loading: false, endOfSearch: true });
-      toast.warn('No images found');
+  useEffect(() => {
+    if (!notInitialRender || !searchQuery) {
       return;
     }
-
-    this.setState(
-      ({ totalHits, images }) => ({
-        totalHits: [...totalHits, ...res.data.hits],
-        images: [...images, ...res.data.hits],
-        loading: false,
-        endOfSearch: false,
-      }),
-      () => {
-        if (this.state.totalHits.length === res.data.totalHits) {
-          this.setState({ endOfSearch: true });
-        }
+    const onSearch = async () => {
+      setImages(s => [...s]);
+      setLoading(true);
+      const res = await fetchImages(searchQuery, page);
+      if (res.data.hits.length === 0) {
+        setImages([]);
+        setLoading(false);
+        setEndOfSearch(true);
+        toast.warn('No images found');
+        return;
       }
-    );
+      setImages(s => {
+        if ([...s, ...res.data.hits].length === res.data.totalHits) {
+          setEndOfSearch(true);
+        }
+        return [...s, ...res.data.hits];
+      });
+      setLoading(false);
+      setEndOfSearch(false);
+    };
+    onSearch();
+  }, [searchQuery, page]);
+
+  const toggleModal = () => {
+    setShowModal(s => !s);
   };
 
-  onHandleSubmit = query => {
-    if (query === this.state.searchQuery) {
-      return
+  const openModal = (image, descr) => {
+    setCurrentImage(image);
+    setCurrentImageDescr(descr);
+    toggleModal();
+  };
+
+  const onHandleSubmit = query => {
+    if (query === searchQuery) {
+      return;
     }
-    this.setState({
-      searchQuery: query,
-      page: 1,
-      images: [],
-      totalHits: [],
-      loading: true,
-    });
+    setSearchQuery(query);
+    setPage(1);
+    setImages([]);
+    setLoading(true);
   };
 
-  render() {
-    const {
-      images,
-      loading,
-      endOfSearch,
-      showModal,
-      currentImage,
-      currentImageDescr,
-    } = this.state;
-    return (
-      <div className="app">
-        {showModal && (
-          <Modal onClose={this.toggleModal}>
-            <img src={currentImage} alt={currentImageDescr} />
-          </Modal>
-        )}
-        <SearchBar onSubmit={this.onHandleSubmit} />
-        {<ImageGallery images={images} openModal={this.openModal} />}
-        {loading && <Loader />}
-        {!endOfSearch && <Button handleLoadMore={this.onSearch} />}
-        <ToastContainer
-          position="top-right"
-          autoClose={1000}
-          hideProgressBar={false}
-          newestOnTop={false}
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover={false}
-          theme="light"
-        />
-      </div>
-    );
-  }
-}
+  const onLoadMore = () => {
+    setPage(s => s + 1);
+  };
+
+  return (
+    <div className="app">
+      {showModal && (
+        <Modal onClose={toggleModal}>
+          <img src={currentImage} alt={currentImageDescr} />
+        </Modal>
+      )}
+      <SearchBar onSubmit={onHandleSubmit} />
+      {<ImageGallery images={images} openModal={openModal} />}
+      {loading && <Loader />}
+      {!endOfSearch && <Button handleLoadMore={onLoadMore} />}
+      <ToastContainer
+        position="top-right"
+        autoClose={1000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover={false}
+        theme="light"
+      />
+    </div>
+  );
+};
 
 export { App };
